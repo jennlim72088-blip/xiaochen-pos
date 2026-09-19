@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-Hans"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>小陈 POS V5.2</title><link rel="manifest" href="./manifest.webmanifest">
+<title>小陈 POS V5.3</title><link rel="manifest" href="./manifest.webmanifest">
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#f5f5f5;color:#171717}
 header{height:58px;background:#111;color:#fff;padding:9px 14px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:9px;font-size:20px;font-weight:800}
@@ -41,7 +41,7 @@ h3{margin:2px 0 10px}label{display:block;color:#666;font-size:13px;margin:10px 0
 <div id="editDiff" class="small"></div>
 <button id="saveEdit" class="primary" style="margin-top:12px">保存改单</button>
 </div></div>
-<header><img src="./icon-192.png"><span>小陈 POS <small style="font-size:11px">V5.2</small></span></header>
+<header><img src="./icon-192.png"><span>小陈 POS <small style="font-size:11px">V5.3</small></span></header>
 <nav><button class="active" data-tab="order">接单</button><button data-tab="queue">订单</button><button data-tab="today">今日</button><button data-tab="settle">结算</button></nav>
 <main>
 <section id="order">
@@ -119,41 +119,58 @@ window.changePayment=id=>{
 };
 window.doneO=id=>{let o=orders.find(x=>x.id===id);if(o){o.status='done';o.doneAt=o.doneAt||new Date().toISOString()}save()};window.collect=(id,m)=>{let o=orders.find(x=>x.id===id);if(o){o.payment=m;o.paidAt=new Date().toISOString()}save()};window.cancelO=id=>{if(confirm('确定取消？')){let o=orders.find(x=>x.id===id);if(o)o.status='cancelled';save()}};
 
-function sourceBasePrice(item,newSource){
- let p=P.find(z=>z.n===(item.n||item.name));if(!p)return +(item.u||0);
- let d=item.d||item.detail||'',v=newSource==='Grab'?(p.g??p.p):p.p;
- if(p.t==='n'){if(newSource!=='Grab'&&d.includes('大'))v=p.b;if(d.includes('快熟面'))v+=(newSource==='Grab'?1.5:.5)}
- if(p.t==='r'&&['鸡腿','鸡二度'].some(z=>d.includes(z)))v=(newSource==='Grab'?10.2:6.5);
- let adds=(d.split('加：')[1]||'').split(' · ')[0].split('、').filter(Boolean);
- let oldSource=source;source=newSource;adds.forEach(a=>v+=addonPrice(a));source=oldSource;return v
+
+let oe={order:null,itemIndex:null};
+function oeAddons(p){return p.t==='n'?['血蛤','鱿鱼','虾','卤蛋','海鲜腐竹5片','鸡脚3支']:((p.t==='r'||p.t==='rl')?['小饭','大饭','加鸡肉']:[])}
+function oePrice(n,src){let old=source;source=src;let v=addonPrice(n);source=old;return v}
+function parseOE(x,src){
+ let p=P.find(z=>z.n===(x.n||x.name));if(!p)return null,d=x.d||x.detail||'';
+ let z={p,source:src,size:d.includes('大')?'大':'普通',noodle:'黄面+米粉',spicy:'普通辣',part:'鸡翅',rem:[],add:[],q:x.q||x.qty||1,note:''};
+ if(p.t==='n'){for(let n of ['黄面+米粉','快熟面','粿条','米粉','黄面'])if(d.includes(n)){z.noodle=n;break}for(let n of ['少辣','加辣','普通辣'])if(d.includes(n)){z.spicy=n;break}}
+ if(p.t==='r')for(let n of ['鸡翅','鸡胸','鸡腿','鸡二度'])if(d.includes(n)){z.part=n;break}
+ let no=(d.split('不要：')[1]||'').split(' · ')[0].split('、');z.rem=p.r.filter(n=>no.includes(n));
+ let ad=(d.split('加：')[1]||'').split(' · ')[0].split('、');z.add=oeAddons(p).filter(n=>ad.includes(n));
+ let m=d.match(/备注：(.+)$/);if(m)z.note=m[1];return z
+}
+function calcOE(z){
+ let p=z.p,v=z.source==='Grab'?(p.g??p.p):p.p;
+ if(p.t==='n'){if(z.source!=='Grab'&&z.size==='大')v=p.b;if(z.noodle==='快熟面')v+=z.source==='Grab'?1.5:.5}
+ if(p.t==='r'&&['鸡腿','鸡二度'].includes(z.part))v=z.source==='Grab'?10.2:6.5;
+ z.add.forEach(n=>v+=oePrice(n,z.source));return v
+}
+function detailOE(z){
+ let d=[];if(z.p.t==='n'&&z.source!=='Grab')d.push(z.size);if(z.p.t==='n')d.push(z.noodle,z.spicy);if(z.p.t==='r')d.push(z.part);
+ if(z.rem.length)d.push('不要：'+z.rem.join('、'));if(z.add.length)d.push('加：'+z.add.join('、'));if(z.note)d.push('备注：'+z.note);return d.join(' · ')||'普通'
 }
 window.openOrderEdit=id=>{
- let o=orders.find(x=>x.id===id);if(!o)return;editingOrderId=id;
- let src=(o.items[0]&&(o.items[0].source||o.items[0].serve))||'堂食';
- chips('editSource',['堂食','打包','Grab'],src,false,v=>{o._editSource=v;renderOrderEdit(o)});
- o._editSource=src;$('editGrabNo').value=o.grabNo||'';$('editNote').value=o.note||'';
- $('editMeta').textContent='#'+String(o.id).slice(-4)+' · 下单 '+fmtTime(o.at||o.created)+' · 原金额 RM'+(+o.total).toFixed(2);
+ let o=orders.find(x=>x.id===id);if(!o)return;editingOrderId=id;oe.order=o;oe.itemIndex=null;
+ o._editSource=(o.items[0]&&(o.items[0].source||o.items[0].serve))||'堂食';
+ $('editGrabNo').value=o.grabNo||'';$('editNote').value=o.note||'';
+ $('editMeta').textContent='#'+String(o.id).slice(-4)+' · 下单 '+fmtTime(o.at||o.created)+' · RM'+(+o.total).toFixed(2);
  renderOrderEdit(o);$('editModal').classList.remove('hide')
 };
 function renderOrderEdit(o){
- let src=o._editSource||((o.items[0]&&(o.items[0].source||o.items[0].serve))||'堂食');
+ let src=o._editSource||'堂食';
  chips('editSource',['堂食','打包','Grab'],src,false,v=>{o._editSource=v;renderOrderEdit(o)});
  $('editGrabBox').classList.toggle('hide',src!=='Grab');
- $('editItems').innerHTML=o.items.map((x,i)=>{let q=x._editQ??(x.q||x.qty||1),u=sourceBasePrice(x,src);x._editU=u;x._editQ=q;return '<div class="cart"><div class="row"><b>'+(x.n||x.name)+'</b><b>RM'+(u*q).toFixed(2)+'</b></div><div class="small">'+(x.d||x.detail||'')+'</div><label>数量</label><input type="number" min="1" value="'+q+'" onchange="editOrderQty('+i+',this.value)"><div style="margin-top:7px"><button class="secondary danger" onclick="removeOrderItem('+i+')">删除这项</button></div></div>'}).join('');
- let nt=o.items.reduce((a,x)=>a+(x._editU||0)*(x._editQ||1),0);$('editTotal').textContent='RM'+nt.toFixed(2);
- let diff=nt-(+o.total||0);$('editDiff').textContent='原金额 RM'+(+o.total).toFixed(2)+' → 新金额 RM'+nt.toFixed(2)+' · 差额 '+(diff>=0?'+':'')+'RM'+diff.toFixed(2)
+ $('editItems').innerHTML=o.items.map((x,i)=>'<div class="cart"><div class="row"><b>'+(x.n||x.name)+' ×'+(x.q||x.qty||1)+'</b><b>RM'+(+x.total).toFixed(2)+'</b></div><div class="small">'+(x.d||x.detail||'')+'</div><button class="secondary" style="margin-top:8px" onclick="editConfirmedItem('+i+')">修改配料 / 口味</button></div>').join('');
+ let nt=o.items.reduce((s,x)=>s+(+x.total||0),0);$('editTotal').textContent='RM'+nt.toFixed(2)
 }
-window.editOrderQty=(i,v)=>{let o=orders.find(x=>x.id===editingOrderId);if(!o)return;o.items[i]._editQ=Math.max(1,+v||1);renderOrderEdit(o)};
-window.removeOrderItem=i=>{let o=orders.find(x=>x.id===editingOrderId);if(!o||o.items.length<=1)return alert('整张订单至少保留一个品项；不要这张单请用取消订单。');o.items.splice(i,1);renderOrderEdit(o)};
-$('closeEdit').onclick=()=>{$('editModal').classList.add('hide');let o=orders.find(x=>x.id===editingOrderId);if(o){delete o._editSource;o.items.forEach(x=>{delete x._editU;delete x._editQ})}editingOrderId=null};
-$('saveEdit').onclick=()=>{
- let o=orders.find(x=>x.id===editingOrderId);if(!o)return;let src=o._editSource||'堂食';
- o.items.forEach(x=>{x.q=x._editQ||x.q||x.qty||1;x.qty=x.q;x.u=x._editU??sourceBasePrice(x,src);x.total=x.u*x.q;x.source=src;x.serve=src;delete x._editU;delete x._editQ});
- o.total=o.items.reduce((a,x)=>a+x.total,0);o.grabNo=src==='Grab'?$('editGrabNo').value.trim():'';o.note=$('editNote').value.trim();
- if(src==='Grab'&&(o.payment==='未付款'||o.payment==='未收款'))o.payment='Grab';
- delete o._editSource;save();$('editModal').classList.add('hide');editingOrderId=null;toast('改单已保存 · RM'+o.total.toFixed(2))
-};
-
+window.editConfirmedItem=i=>{let o=oe.order,z=parseOE(o.items[i],o._editSource||'堂食');if(!z)return alert('无法读取这个品项');oe.itemIndex=i;oe.z=z;renderOE()};
+function renderOE(){
+ let z=oe.z,p=z.p;
+ $('editItems').innerHTML='<div class="cart"><h3>修改：'+p.n+'</h3><div id="os"></div><div id="on"></div><div id="op"></div><div id="opt"></div><div id="or"></div><div id="oa"></div><label>数量</label><input id="oq" type="number" min="1" value="'+z.q+'"><label>品项备注</label><input id="ont" value="'+String(z.note).replace(/"/g,'&quot;')+'"><div class="line"></div><div class="row"><button class="secondary" onclick="cancelOE()">返回</button><button class="primary" style="width:auto" onclick="saveOE()">保存这个品项</button></div></div>';
+ function box(id,label,arr,sel,multi,key){if(!arr.length)return;$(id).innerHTML='<label>'+label+'</label><div id="'+id+'c" class="chips"></div>';chips(id+'c',arr,sel,multi,v=>{z[key]=multi?(z[key].includes(v)?z[key].filter(a=>a!==v):[...z[key],v]):v;renderOE()},v=>key==='add'?v+' +RM'+oePrice(v,z.source).toFixed(2):v)}
+ box('os','份量',p.t==='n'&&z.source!=='Grab'?['普通','大']:[],z.size,false,'size');
+ box('on','面类',p.t==='n'?['黄面+米粉','黄面','米粉','粿条','快熟面']:[],z.noodle,false,'noodle');
+ box('op','辣度',p.t==='n'?['普通辣','少辣','加辣']:[],z.spicy,false,'spicy');
+ box('opt','鸡饭部位',p.t==='r'?['鸡翅','鸡胸','鸡腿','鸡二度']:[],z.part,false,'part');
+ box('or','不要配料',p.r,z.rem,true,'rem');box('oa','加料',oeAddons(p),z.add,true,'add')
+}
+window.cancelOE=()=>{oe.itemIndex=null;renderOrderEdit(oe.order)};
+window.saveOE=()=>{let z=oe.z,x=oe.order.items[oe.itemIndex];z.q=Math.max(1,+$('oq').value||1);z.note=$('ont').value.trim();let u=calcOE(z);x.q=x.qty=z.q;x.u=u;x.total=u*z.q;x.source=x.serve=z.source;x.d=x.detail=detailOE(z);oe.itemIndex=null;renderOrderEdit(oe.order)};
+$('closeEdit').onclick=()=>{$('editModal').classList.add('hide');editingOrderId=null;oe.order=null};
+$('saveEdit').onclick=()=>{let o=orders.find(x=>x.id===editingOrderId);if(!o)return;let src=o._editSource||'堂食';let old=+o.total||0;o.items.forEach(x=>{x.source=x.serve=src});o.total=o.items.reduce((s,x)=>s+(+x.total||0),0);o.grabNo=src==='Grab'?$('editGrabNo').value.trim():'';o.note=$('editNote').value.trim();o.editHistory=o.editHistory||[];o.editHistory.push({at:new Date().toISOString(),oldTotal:old,newTotal:o.total});delete o._editSource;save();$('editModal').classList.add('hide');editingOrderId=null;oe.order=null;toast('改单已保存 · RM'+o.total.toFixed(2))};
 function renderToday(){let t=orders.filter(o=>o.status!=='cancelled'&&dayKey(new Date(o.at||o.created))===dayKey()),sum=t.reduce((a,o)=>a+o.total,0),rec=t.filter(o=>o.payment&&o.payment!=='未付款'&&o.payment!=='未收款').reduce((a,o)=>a+o.total,0),ps={Cash:0,TNGO:0,Grab:0},it={},src={堂食:0,打包:0,Grab:0};t.forEach(o=>{if(ps[o.payment]!==undefined)ps[o.payment]+=o.total;o.items.forEach(x=>{let q=x.q||x.qty||1,n=x.n||x.name,z=x.source||x.serve||'堂食';it[n]=(it[n]||0)+q;src[z]=(src[z]||0)+q})});$('sales').textContent='RM'+sum.toFixed(2);$('count').textContent=t.length;$('payStats').innerHTML='<div class="row item"><b>已收款</b><b>RM'+rec.toFixed(2)+'</b></div><div class="row item"><b>未收款</b><b>RM'+(sum-rec).toFixed(2)+'</b></div>'+Object.entries(ps).map(x=>'<div class="row item"><span>'+x[0]+'</span><span>RM'+x[1].toFixed(2)+'</span></div>').join('');$('sourceStats').innerHTML=Object.entries(src).map(x=>'<div class="row item"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');$('itemStats').innerHTML=Object.entries(it).map(x=>'<div class="row item"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('')||'暂无'}
 function renderSettle(){let t=orders.filter(o=>o.status!=='cancelled'&&dayKey(new Date(o.at||o.created))===dayKey()),gross=t.flatMap(o=>o.items).filter(x=>(x.source||x.serve)==='Grab').reduce((a,x)=>a+x.total,0),d=settlements[dayKey()]||{fees:0,ads:0,other:0};$('grabGross').textContent='RM'+gross.toFixed(2);$('grabFees').value=d.fees;$('adFees').value=d.ads;$('otherFees').value=d.other;calcNet(gross)}
 function calcNet(g){$('grabNet').textContent='RM'+(g-(+$('grabFees').value||0)-(+ $('adFees').value||0)-(+ $('otherFees').value||0)).toFixed(2)}
