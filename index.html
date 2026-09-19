@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-Hans"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>小陈 POS V5.3</title><link rel="manifest" href="./manifest.webmanifest">
+<title>小陈 POS V5.3.1</title><link rel="manifest" href="./manifest.webmanifest">
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#f5f5f5;color:#171717}
 header{height:58px;background:#111;color:#fff;padding:9px 14px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:9px;font-size:20px;font-weight:800}
@@ -41,7 +41,7 @@ h3{margin:2px 0 10px}label{display:block;color:#666;font-size:13px;margin:10px 0
 <div id="editDiff" class="small"></div>
 <button id="saveEdit" class="primary" style="margin-top:12px">保存改单</button>
 </div></div>
-<header><img src="./icon-192.png"><span>小陈 POS <small style="font-size:11px">V5.3</small></span></header>
+<header><img src="./icon-192.png"><span>小陈 POS <small style="font-size:11px">V5.3.1</small></span></header>
 <nav><button class="active" data-tab="order">接单</button><button data-tab="queue">订单</button><button data-tab="today">今日</button><button data-tab="settle">结算</button></nav>
 <main>
 <section id="order">
@@ -124,7 +124,7 @@ let oe={order:null,itemIndex:null};
 function oeAddons(p){return p.t==='n'?['血蛤','鱿鱼','虾','卤蛋','海鲜腐竹5片','鸡脚3支']:((p.t==='r'||p.t==='rl')?['小饭','大饭','加鸡肉']:[])}
 function oePrice(n,src){let old=source;source=src;let v=addonPrice(n);source=old;return v}
 function parseOE(x,src){
- let p=P.find(z=>z.n===(x.n||x.name));if(!p)return null,d=x.d||x.detail||'';
+ let p=P.find(z=>z.n===(x.n||x.name));if(!p)return null;let d=x.d||x.detail||'';
  let z={p,source:src,size:d.includes('大')?'大':'普通',noodle:'黄面+米粉',spicy:'普通辣',part:'鸡翅',rem:[],add:[],q:x.q||x.qty||1,note:''};
  if(p.t==='n'){for(let n of ['黄面+米粉','快熟面','粿条','米粉','黄面'])if(d.includes(n)){z.noodle=n;break}for(let n of ['少辣','加辣','普通辣'])if(d.includes(n)){z.spicy=n;break}}
  if(p.t==='r')for(let n of ['鸡翅','鸡胸','鸡腿','鸡二度'])if(d.includes(n)){z.part=n;break}
