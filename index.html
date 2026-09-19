@@ -16,9 +16,10 @@ input{width:100%;padding:10px;border:1px solid #ccc;border-radius:9px;font-size:
 .small{font-size:13px;color:#666}.stat{font-size:24px;font-weight:800}.hide{display:none}.cart{border:1px solid #ddd;border-radius:10px;padding:9px;margin:8px 0}.item{border-bottom:1px solid #eee;padding:9px 0}.badge{display:inline-block;background:#eee;border-radius:20px;padding:2px 7px;font-size:12px}.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style></head><body>
 <header>小陈 POS</header>
-<nav><button class="active" data-tab="order">接单</button><button data-tab="queue">订单</button><button data-tab="today">今日</button></nav>
+<nav><button class="active" data-tab="order">接单</button><button data-tab="queue">订单</button><button data-tab="today">今日</button><button data-tab="settle">结算</button></nav>
 <main>
 <section id="order">
+<div class="card"><h3>订单来源</h3><div class="chips" id="source"></div><div class="small" style="margin-top:7px">Grab 使用 Grab 售价；堂食/打包使用现场售价。</div></div>
 <div class="card"><h3>1. 选品项</h3><div id="menu" class="grid menu"></div></div>
 <div class="card"><h3 id="title">2. 设置品项</h3>
 <div id="sizeBox"><label>份量</label><div id="sizes" class="chips"></div></div>
@@ -37,17 +38,28 @@ input{width:100%;padding:10px;border:1px solid #ccc;border-radius:9px;font-size:
 <label>整单备注</label><input id="orderNote" placeholder="例如：同桌">
 <div class="line"></div><button id="submit" class="primary">确认整张订单</button></div>
 </section>
-<section id="queue" class="hide"><div id="queueList"></div></section>
+<section id="queue" class="hide"><div class="card"><div class="chips" id="filterBtns"></div><label>待做超时提醒（分钟）</label><input id="lateMin" type="number" min="1" value="10"></div><div id="queueList"></div></section>
 <section id="today" class="hide"><div class="stats"><div class="card"><div class="small">订单总额</div><div id="sales" class="stat"></div></div><div class="card"><div class="small">订单数</div><div id="count" class="stat"></div></div></div><div id="payStats" class="card"></div><div class="card"><h3>今日品项</h3><div id="itemStats"></div></div><button id="csv" class="secondary">导出今日 CSV</button></section>
+<section id="settle" class="hide">
+<div class="card"><h3>Grab 今日结算</h3>
+<div class="small">晚上 Grab Portal 完成结算后才填。</div>
+<label>Grab 销售额</label><div id="grabGross" class="stat">RM0.00</div>
+<label>Grab费用/佣金 RM</label><input id="grabFees" type="number" step=".01" value="0">
+<label>广告费 RM</label><input id="adFees" type="number" step=".01" value="0">
+<label>其他扣款 RM</label><input id="otherFees" type="number" step=".01" value="0">
+<div class="line"></div><div class="row"><b>预计 Grab 实收</b><b id="grabNet" class="stat">RM0.00</b></div>
+<button id="saveSettle" class="primary" style="margin-top:12px">保存结算</button></div>
+</section>
 </main>
 <script>
 const P=[
-{id:'w',n:'白咖喱面',p:8,b:9,t:'n',r:['猪血','豆芽','血蛤','鱿鱼','虾','长豆','薄荷','Laksa花','海鲜腐竹']},
-{id:'h',n:'福建面',p:7,b:8,t:'n',r:['豆芽','雍菜','鱼饼','瘦肉片','虾','半颗卤蛋','炸葱头酥']},
-{id:'l',n:'当归卤面',p:7,b:8,t:'n',r:['豆芽','鱼饼','鸡丝','炸葱头酥','半颗卤蛋','蒜米醋','鸡脚两只']},
-{id:'c',n:'猪肠粉',p:5,t:'s',r:[]},{id:'r',n:'鸡饭',p:6,t:'r',r:['豆芽','半颗卤蛋']},{id:'rl',n:'L Shape 鸡饭',p:12,t:'rl',r:['豆芽','半颗卤蛋']}];
-const A=[['血蛤',2],['鱿鱼',2],['虾',2],['卤蛋',2]],$=x=>document.getElementById(x);
-let s,cart=[],payment='未付款',orders=JSON.parse(localStorage.getItem('xc_orders_v4')||'[]');
+{id:'w',n:'白咖喱面',p:8,b:9,g:11.5,t:'n',r:['猪血','豆芽','血蛤','鱿鱼','虾','长豆','薄荷','Laksa花','海鲜腐竹']},
+{id:'h',n:'福建面',p:7,b:8,g:10,t:'n',r:['豆芽','雍菜','鱼饼','瘦肉片','虾','半颗卤蛋','炸葱头酥']},
+{id:'l',n:'当归卤面',p:7,b:8,g:10,t:'n',r:['豆芽','鱼饼','鸡丝','炸葱头酥','半颗卤蛋','蒜米醋','鸡脚两只']},
+{id:'c',n:'猪肠粉',p:5,g:7,t:'s',r:[]},{id:'r',n:'鸡饭',p:6,g:8.6,t:'r',r:['豆芽','半颗卤蛋']},{id:'rl',n:'L Shape 鸡饭',p:12,t:'rl',r:['豆芽','半颗卤蛋']}];
+const A=[['血蛤',2],['鱿鱼',2],['虾',2],['卤蛋',2],['海鲜腐竹5片',2],['鸡脚3支',2]],$=x=>document.getElementById(x);
+let source='堂食',s,cart=[],payment='未付款',orders=JSON.parse(localStorage.getItem('xc_orders_v4')||'[]');
+let settlements=JSON.parse(localStorage.getItem('xc_settlements_v4')||'{}');
 function fresh(p=P[0]){s={p,size:'普通',noodle:'黄面+米粉',spicy:'普通辣',part:'鸡翅',serve:'堂食',rem:[],add:[]};$('qty').value=1;$('itemNote').value='';edit()}
 function ch(id,a,sel,multi,fn){$(id).innerHTML='';a.forEach(x=>{let v=Array.isArray(x)?x[0]:x,b=document.createElement('button');b.className='chip '+((multi?sel.includes(v):sel===v)?'on':'');b.textContent=Array.isArray(x)?`${x[0]} +RM${x[1]}`:v;b.onclick=()=>fn(v);$(id).appendChild(b)})}
 function menu(){$('menu').innerHTML='';P.forEach(p=>{let b=document.createElement('button');b.innerHTML=`<b>${p.n}</b>RM${p.p.toFixed(2)}${p.b?' / 大 RM'+p.b.toFixed(2):''}`;b.onclick=()=>fresh(p);$('menu').appendChild(b)})}
@@ -92,6 +104,20 @@ function today(){
  $('itemStats').innerHTML=Object.entries(it).map(x=>`<div class="row item"><span>${x[0]}</span><b>${x[1]}</b></div>`).join('')||'暂无'
 }
 $('csv').onclick=()=>{let t=orders.filter(o=>o.status!=='cancelled'&&dk(new Date(o.at||o.created))===dk()),r=[['订单','品项','数量','堂食/打包','金额','付款']];t.forEach(o=>o.items.forEach(x=>r.push([o.id,x.n||x.name,x.q||x.qty,x.serve,x.total,o.payment])));let a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+r.map(x=>x.join(',')).join('\n')],{type:'text/csv'}));a.download='小陈POS_'+dk()+'.csv';a.click()}
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');['order','queue','today'].forEach(x=>$(x).classList.toggle('hide',x!==b.dataset.tab));queue();today()});
+
+function renderSettle(){let t=orders.filter(o=>o.status!=='cancelled'&&dayKey(new Date(o.created||o.at))===dayKey()),gross=t.flatMap(o=>o.items).filter(x=>(x.source||x.serve)==='Grab').reduce((a,x)=>a+x.total,0),d=settlements[dayKey()]||{fees:0,ads:0,other:0};$('grabGross').textContent='RM'+gross.toFixed(2);$('grabFees').value=d.fees;$('adFees').value=d.ads;$('otherFees').value=d.other;calcNet(gross)}
+function calcNet(g){$('grabNet').textContent='RM'+(g-(+$('grabFees').value||0)-(+ $('adFees').value||0)-(+ $('otherFees').value||0)).toFixed(2)}
+['grabFees','adFees','otherFees'].forEach(id=>$(id).oninput=()=>calcNet(+$('grabGross').textContent.replace('RM','')));
+$('saveSettle').onclick=()=>{settlements[dayKey()]={fees:+$('grabFees').value||0,ads:+$('adFees').value||0,other:+$('otherFees').value||0};localStorage.setItem('xc_settlements_v4',JSON.stringify(settlements));alert('Grab结算已保存')};
+$('lateMin').value=lateMinutes;$('lateMin').onchange=()=>{lateMinutes=Math.max(1,+$('lateMin').value||10);localStorage.setItem('xc_late_min',lateMinutes);renderQueue()};
+
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+function renderSettle(){let t=orders.filter(o=>o.status!=='cancelled'&&dayKey(new Date(o.created||o.at))===dayKey()),gross=t.flatMap(o=>o.items).filter(x=>(x.source||x.serve)==='Grab').reduce((a,x)=>a+x.total,0),d=settlements[dayKey()]||{fees:0,ads:0,other:0};$('grabGross').textContent='RM'+gross.toFixed(2);$('grabFees').value=d.fees;$('adFees').value=d.ads;$('otherFees').value=d.other;calcNet(gross)}
+function calcNet(g){$('grabNet').textContent='RM'+(g-(+$('grabFees').value||0)-(+ $('adFees').value||0)-(+ $('otherFees').value||0)).toFixed(2)}
+['grabFees','adFees','otherFees'].forEach(id=>$(id).oninput=()=>calcNet(+$('grabGross').textContent.replace('RM','')));
+$('saveSettle').onclick=()=>{settlements[dayKey()]={fees:+$('grabFees').value||0,ads:+$('adFees').value||0,other:+$('otherFees').value||0};localStorage.setItem('xc_settlements_v4',JSON.stringify(settlements));alert('Grab结算已保存')};
+$('lateMin').value=lateMinutes;$('lateMin').onchange=()=>{lateMinutes=Math.max(1,+$('lateMin').value||10);localStorage.setItem('xc_late_min',lateMinutes);renderQueue()};
+
+document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');['order','queue','today','settle'].forEach(x=>$(x).classList.toggle('hide',x!==b.dataset.tab));queue();today()});
 menu();fresh();pay();drawCart();queue();today();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');
 </script></body></html>
