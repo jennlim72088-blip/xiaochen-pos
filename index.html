@@ -16,7 +16,7 @@ input{width:100%;padding:10px;border:1px solid #ccc;border-radius:9px;font-size:
 .small{font-size:13px;color:#666}.stat{font-size:24px;font-weight:800}.hide{display:none}.cart{border:1px solid #ddd;border-radius:10px;padding:9px;margin:8px 0}.item{border-bottom:1px solid #eee;padding:9px 0}.badge{display:inline-block;background:#eee;border-radius:20px;padding:2px 7px;font-size:12px}.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style></head><body>
 <header>小陈 POS</header>
-<nav><button class="active" data-tab="order">接单</button><button data-tab="queue">待做</button><button data-tab="today">今日</button></nav>
+<nav><button class="active" data-tab="order">接单</button><button data-tab="queue">订单</button><button data-tab="today">今日</button></nav>
 <main>
 <section id="order">
 <div class="card"><h3>1. 选品项</h3><div id="menu" class="grid menu"></div></div>
@@ -47,7 +47,7 @@ const P=[
 {id:'l',n:'当归卤面',p:7,b:8,t:'n',r:['豆芽','鱼饼','鸡丝','炸葱头酥','半颗卤蛋','蒜米醋','鸡脚两只']},
 {id:'c',n:'猪肠粉',p:5,t:'s',r:[]},{id:'r',n:'鸡饭',p:6,t:'r',r:['豆芽','半颗卤蛋']},{id:'rl',n:'L Shape 鸡饭',p:12,t:'rl',r:['豆芽','半颗卤蛋']}];
 const A=[['血蛤',2],['鱿鱼',2],['虾',2],['卤蛋',2]],$=x=>document.getElementById(x);
-let s,cart=[],payment='Cash',orders=JSON.parse(localStorage.getItem('xc_orders_v4')||'[]');
+let s,cart=[],payment='未付款',orders=JSON.parse(localStorage.getItem('xc_orders_v4')||'[]');
 function fresh(p=P[0]){s={p,size:'普通',noodle:'黄面+米粉',spicy:'普通辣',part:'鸡翅',serve:'堂食',rem:[],add:[]};$('qty').value=1;$('itemNote').value='';edit()}
 function ch(id,a,sel,multi,fn){$(id).innerHTML='';a.forEach(x=>{let v=Array.isArray(x)?x[0]:x,b=document.createElement('button');b.className='chip '+((multi?sel.includes(v):sel===v)?'on':'');b.textContent=Array.isArray(x)?`${x[0]} +RM${x[1]}`:v;b.onclick=()=>fn(v);$(id).appendChild(b)})}
 function menu(){$('menu').innerHTML='';P.forEach(p=>{let b=document.createElement('button');b.innerHTML=`<b>${p.n}</b>RM${p.p.toFixed(2)}${p.b?' / 大 RM'+p.b.toFixed(2):''}`;b.onclick=()=>fresh(p);$('menu').appendChild(b)})}
@@ -57,13 +57,40 @@ function price(){let p=s.p,v=p.p;if(p.t==='n'){if(s.size==='大')v=p.b;if(s.nood
 function drawCart(){if(!cart.length)$('cart').innerHTML='<div class="small">还没有品项</div>';else $('cart').innerHTML=cart.map((x,i)=>`<div class="cart"><div class="row"><b>${x.n} ×${x.q}</b><b>RM${x.total.toFixed(2)}</b></div><div><span class="badge">${x.serve}</span></div><div class="small">${x.d}</div><button class="secondary danger" onclick="del(${i})">删除</button></div>`).join('');$('total').textContent='RM'+cart.reduce((a,x)=>a+x.total,0).toFixed(2)}
 window.del=i=>{cart.splice(i,1);drawCart()};
 $('add').onclick=()=>{let q=Math.max(1,+$('qty').value||1),d=[];if(s.p.t==='n')d.push(s.size,s.noodle,s.spicy);if(s.p.t==='r')d.push(s.part);if(s.rem.length)d.push('不要：'+s.rem.join('、'));if(s.add.length)d.push('加：'+s.add.join('、'));if($('itemNote').value.trim())d.push('备注：'+$('itemNote').value.trim());let u=price();cart.push({n:s.p.n,q,serve:s.serve,u,total:u*q,d:d.join(' · ')||'普通'});drawCart();$('itemNote').value='';$('qty').value=1}
-function pay(){ch('pay',['Cash','TNGO','Grab','未收款'],payment,0,v=>{payment=v;pay()})}
+function pay(){ch('pay',['未付款','Cash','TNGO','Grab'],payment,0,v=>{payment=v;pay()})}
 $('submit').onclick=()=>{if(!cart.length)return alert('先加入品项');orders.push({id:Date.now(),at:new Date().toISOString(),status:'pending',payment,note:$('orderNote').value.trim(),items:[...cart],total:cart.reduce((a,x)=>a+x.total,0)});save();cart=[];$('orderNote').value='';drawCart();alert('已加入待做')}
 function save(){localStorage.setItem('xc_orders_v4',JSON.stringify(orders));queue();today()}
-function queue(){let q=orders.filter(o=>o.status==='pending');$('queueList').innerHTML=q.length?q.map(o=>`<div class="card"><div class="row"><b>#${String(o.id).slice(-4)}</b><b>RM${o.total.toFixed(2)}</b></div>${o.items.map(x=>`<div class="item"><b>${x.n} ×${x.q}</b> <span class="badge">${x.serve}</span><div class="small">${x.d}</div></div>`).join('')}<div class="small">${o.payment}${o.note?' · '+o.note:''}</div><div class="line"></div><div class="row"><button class="secondary danger" onclick="cancelO(${o.id})">取消</button><button class="primary" style="width:auto" onclick="doneO(${o.id})">完成</button></div></div>`).join(''):'<div class="card">没有待做订单</div>'}
-window.doneO=id=>{orders.find(o=>o.id===id).status='done';save()};window.cancelO=id=>{if(confirm('确定取消？')){orders.find(o=>o.id===id).status='cancelled';save()}};
+function queue(){
+ let q=orders.filter(o=>o.status!=='cancelled').sort((a,b)=>b.id-a.id);
+ $('queueList').innerHTML=q.length?q.map(o=>{
+   let paid=(o.payment&&o.payment!=='未付款'&&o.payment!=='未收款'), done=o.status==='done';
+   let state=done?(paid?'已完成 · 已付款':'已完成 · 待付款'):'待做'+(paid?' · 已付款':' · 未付款');
+   let payButtons=paid?'':`<div class="chips" style="margin-top:8px">
+     <button class="chip" onclick="collect(${o.id},'Cash')">收 Cash</button>
+     <button class="chip" onclick="collect(${o.id},'TNGO')">收 TNGO</button>
+     <button class="chip" onclick="collect(${o.id},'Grab')">Grab</button></div>`;
+   return `<div class="card"><div class="row"><b>#${String(o.id).slice(-4)}</b><span class="badge">${state}</span></div>
+   ${o.items.map(x=>`<div class="item"><b>${x.n||x.name} ×${x.q||x.qty}</b> <span class="badge">${x.serve}</span><div class="small">${x.d||x.detail||''}</div></div>`).join('')}
+   <div class="row"><b>RM${o.total.toFixed(2)}</b><b>${paid?o.payment:'未付款'}</b></div>${o.note?`<div class="small">${o.note}</div>`:''}
+   ${payButtons}<div class="line"></div><div class="row">
+   <button class="secondary danger" onclick="cancelO(${o.id})">取消</button>
+   ${done?'':`<button class="primary" style="width:auto" onclick="doneO(${o.id})">制作完成</button>`}</div></div>`
+ }).join(''):'<div class="card">目前没有订单</div>'
+}
+window.doneO=id=>{orders.find(o=>o.id===id).status='done';save()};
+window.collect=(id,method)=>{let o=orders.find(x=>x.id===id);o.payment=method;o.paidAt=new Date().toISOString();save()};
+window.cancelO=id=>{if(confirm('确定取消？')){orders.find(o=>o.id===id).status='cancelled';save()}};
 function dk(d=new Date()){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-function today(){let t=orders.filter(o=>o.status!=='cancelled'&&dk(new Date(o.at||o.created))===dk()),sum=t.reduce((a,o)=>a+o.total,0);$('sales').textContent='RM'+sum.toFixed(2);$('count').textContent=t.length;let ps={Cash:0,TNGO:0,Grab:0,'未收款':0},it={};t.forEach(o=>{ps[o.payment]=(ps[o.payment]||0)+o.total;o.items.forEach(x=>it[x.n||x.name]=(it[x.n||x.name]||0)+(x.q||x.qty))});$('payStats').innerHTML=Object.entries(ps).map(x=>`<div class="row item"><b>${x[0]}</b><span>RM${x[1].toFixed(2)}</span></div>`).join('');$('itemStats').innerHTML=Object.entries(it).map(x=>`<div class="row item"><span>${x[0]}</span><b>${x[1]}</b></div>`).join('')||'暂无'}
+function today(){
+ let t=orders.filter(o=>o.status!=='cancelled'&&dk(new Date(o.at||o.created))===dk());
+ let sum=t.reduce((a,o)=>a+o.total,0),received=t.filter(o=>o.payment&&o.payment!=='未付款'&&o.payment!=='未收款').reduce((a,o)=>a+o.total,0),unpaid=sum-received;
+ $('sales').textContent='RM'+sum.toFixed(2);$('count').textContent=t.length;
+ let ps={Cash:0,TNGO:0,Grab:0},it={};
+ t.forEach(o=>{if(ps[o.payment]!==undefined)ps[o.payment]+=o.total;o.items.forEach(x=>it[x.n||x.name]=(it[x.n||x.name]||0)+(x.q||x.qty))});
+ $('payStats').innerHTML=`<div class="row item"><b>已收款</b><b>RM${received.toFixed(2)}</b></div><div class="row item"><b>未收款</b><b>RM${unpaid.toFixed(2)}</b></div>`+
+ Object.entries(ps).map(x=>`<div class="row item"><span>${x[0]}</span><span>RM${x[1].toFixed(2)}</span></div>`).join('');
+ $('itemStats').innerHTML=Object.entries(it).map(x=>`<div class="row item"><span>${x[0]}</span><b>${x[1]}</b></div>`).join('')||'暂无'
+}
 $('csv').onclick=()=>{let t=orders.filter(o=>o.status!=='cancelled'&&dk(new Date(o.at||o.created))===dk()),r=[['订单','品项','数量','堂食/打包','金额','付款']];t.forEach(o=>o.items.forEach(x=>r.push([o.id,x.n||x.name,x.q||x.qty,x.serve,x.total,o.payment])));let a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+r.map(x=>x.join(',')).join('\n')],{type:'text/csv'}));a.download='小陈POS_'+dk()+'.csv';a.click()}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');['order','queue','today'].forEach(x=>$(x).classList.toggle('hide',x!==b.dataset.tab));queue();today()});
 menu();fresh();pay();drawCart();queue();today();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');
