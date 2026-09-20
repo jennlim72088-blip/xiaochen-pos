@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-Hans"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>小陈 POS V5.4.1</title><link rel="manifest" href="./manifest.webmanifest">
+<title>小陈 POS V5.4.2</title><link rel="manifest" href="./manifest.webmanifest">
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#f5f5f5;color:#171717}
 header{height:58px;background:#111;color:#fff;padding:9px 14px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:9px;font-size:20px;font-weight:800}
@@ -41,7 +41,7 @@ h3{margin:2px 0 10px}label{display:block;color:#666;font-size:13px;margin:10px 0
 <div id="editDiff" class="small"></div>
 <button id="saveEdit" class="primary" style="margin-top:12px">保存改单</button>
 </div></div>
-<header><img src="./icon-192.png"><span>小陈 POS <small style="font-size:11px">V5.4.1</small></span></header>
+<header><img src="./icon-192.png"><span>小陈 POS <small style="font-size:11px">V5.4.2</small></span></header>
 <nav><button class="active" data-tab="order">接单</button><button data-tab="queue">订单</button><button data-tab="today">今日</button><button data-tab="settle">结算</button></nav>
 <main>
 <section id="order">
@@ -66,7 +66,7 @@ h3{margin:2px 0 10px}label{display:block;color:#666;font-size:13px;margin:10px 0
 </main>
 <script>
 const $=id=>document.getElementById(id);
-const dayKey=(d=new Date())=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const dayKey=(v=new Date())=>{let d=v instanceof Date?v:new Date(v);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const P=[
 {id:'w',n:'白咖喱面',p:8,b:9,g:12.5,t:'n',r:['猪血','豆芽','血蛤','鱿鱼','虾','长豆','薄荷','Laksa花','海鲜腐竹']},
 {id:'h',n:'福建面',p:7,b:8,g:10.9,t:'n',r:['豆芽','雍菜','鱼饼','瘦肉片','虾','半颗卤蛋','炸葱头酥']},
@@ -78,7 +78,7 @@ let settlements=JSON.parse(localStorage.getItem('xc_settlements_v4')||'{}'),sour
 let viewDay=new Date();
 function ymd(d){let x=new Date(d);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')}
 function sameViewDay(v){let d=new Date(v);return d.getFullYear()===viewDay.getFullYear()&&d.getMonth()===viewDay.getMonth()&&d.getDate()===viewDay.getDate()}
-window.setViewDay=n=>{let d=new Date();d.setDate(d.getDate()+n);viewDay=d;let e=$('viewDate');if(e)e.value=ymd(d);renderQueue();renderToday()}
+window.setViewDay=n=>{let d=new Date();d.setDate(d.getDate()+n);viewDay=d;let e=$('viewDate');if(e)e.value=ymd(d);renderQueue();renderToday();renderSettle()}
 
 function chips(id,arr,sel,multi,fn,label){$(id).innerHTML='';arr.forEach(v=>{let b=document.createElement('button');b.className='chip '+((multi?sel.includes(v):sel===v)?'on':'');b.textContent=label?label(v):v;b.onclick=()=>fn(v);$(id).appendChild(b)})}
 function addonPrice(n){if(source==='Grab'){if(['虾','血蛤','鱿鱼','鸡脚3支','鸡丝'].includes(n))return 3;if(n==='小饭')return 1.5;if(n==='大饭')return 2;if(n==='加鸡肉')return 5;return 2}if(['虾','血蛤','鱿鱼'].includes(n))return new Date()>=new Date('2026-10-01T00:00:00')?3:2;if(n==='小饭')return 1.5;if(n==='大饭')return 2;if(n==='加鸡肉')return 5;return 2}
